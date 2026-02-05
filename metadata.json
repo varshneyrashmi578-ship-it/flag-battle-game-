@@ -1,0 +1,5 @@
+{
+  "name": "Flag Battle Royale",
+  "description": "A physics-based country elimination game where the last flag remaining in the rotating circle wins.",
+  "requestFramePermissions": []
+}
