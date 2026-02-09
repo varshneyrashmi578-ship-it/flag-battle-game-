@@ -87,7 +87,7 @@ const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [targetWinnerId, setTargetWinnerId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const lastSpokenRef = useRef<number | string>(-1);
@@ -117,7 +117,6 @@ const App: React.FC = () => {
   };
 
   const announceWinner = async (countryName: string) => {
-    // Prevent repeating the same announcement
     if (lastSpokenRef.current === `win-${countryName}`) return;
     lastSpokenRef.current = `win-${countryName}`;
 
@@ -139,13 +138,13 @@ const App: React.FC = () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `${countryName} is the champion!` }] }],
+        model: "gemini-3-flash-preview",
+        contents: [{ parts: [{ text: `Announce with excitement: ${countryName} is the champion!` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
             voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Charon' }, // Male voice
+              prebuiltVoiceConfig: { voiceName: 'Charon' }, 
             },
           },
         },
@@ -157,35 +156,34 @@ const App: React.FC = () => {
         const audioBuffer = await decodeAudioData(decodeBase64(base64Audio), audioCtx, 24000, 1);
         const source = audioCtx.createBufferSource();
         const gainNode = audioCtx.createGain();
-        
-        gainNode.gain.value = 1.4; // Balanced volume
-        
+        gainNode.gain.value = 1.4; 
         source.buffer = audioBuffer;
         source.connect(gainNode);
         gainNode.connect(audioCtx.destination);
-        
         currentAudioSourceRef.current = source;
         source.start();
       } else {
         fallbackAnnounce();
       }
     } catch (error: any) {
-      console.warn("TTS Failed, using fallback", error?.message);
       fallbackAnnounce();
     }
   };
 
   const handleWinnerDetected = useCallback((winnerCountry: Country) => {
-    // Immidiate voice trigger when only 1 flag remains
+    // Speak as soon as visually revealed
     announceWinner(winnerCountry.name);
   }, []);
 
   const handleGameEnd = useCallback((lastCountry: Country) => {
-    // UI state change after a few seconds of celebration
     setWinner(lastCountry);
     setStatus(GameStatus.FINISHED);
     setIsPaused(false);
     setShowSettings(false);
+  }, []);
+
+  const handleElimination = useCallback((country: Country) => {
+    setEliminatedCount(prev => prev + 1);
   }, []);
 
   const handleRestart = (riggedCountryCode?: string) => {
@@ -194,7 +192,7 @@ const App: React.FC = () => {
     if (currentAudioSourceRef.current) {
       try { currentAudioSourceRef.current.stop(); } catch(e){}
     }
-    
+
     setGameKey(prev => prev + 1);
     setEliminatedCount(0);
     setWinner(null);
@@ -203,6 +201,11 @@ const App: React.FC = () => {
     setTargetWinnerId(riggedCountryCode || null);
     lastSpokenRef.current = -1;
   };
+
+  // Initial setup
+  useEffect(() => {
+    handleRestart();
+  }, []);
 
   const themeConfig = {
     [VisualTheme.SPACE]: { bg: 'bg-neutral-950', accent: 'blue' },
@@ -218,15 +221,20 @@ const App: React.FC = () => {
           0%, 100% { transform: scale(1); opacity: 0.8; }
           50% { transform: scale(1.1); opacity: 1; }
         }
+        @keyframes slideInUp {
+          0% { transform: translateY(100%); opacity: 0; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
         .animate-pulse-scale { animation: pulse-scale 1s ease-in-out infinite; }
+        .animate-slide-up { animation: slideInUp 0.5s ease-out forwards; }
         
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
       `}</style>
 
-      {/* Top HUD */}
-      <div className="absolute top-12 left-1/2 -translate-x-1/2 z-30 flex items-center gap-6 pointer-events-none">
+      {/* Top HUD - Moved even higher */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-6 pointer-events-none">
         {activeCountries.slice(0, 5).map((country, idx) => (
           <div key={country.code} className={`flex flex-col items-center gap-2 transition-all duration-700 ${idx === 0 ? 'scale-125 opacity-100' : 'opacity-80 scale-100'}`}>
             <div className={`p-1.5 rounded-xl border-2 shadow-2xl transition-all duration-500 ${idx === 0 ? 'border-yellow-400 bg-yellow-400/20' : 'border-white/20 bg-black/60'}`}>
@@ -248,17 +256,21 @@ const App: React.FC = () => {
         </div>
       </div>
 
+      {/* Sidebar with Arena Master */}
       <div className="absolute top-8 right-8 z-20 flex flex-col gap-4 items-end h-[calc(100vh-64px)] w-80">
         <div className="bg-black/80 backdrop-blur-3xl border border-white/10 rounded-3xl w-full flex flex-col min-h-0 grow overflow-hidden shadow-2xl">
           <div className="p-4 border-b border-white/5 shrink-0">
             <h2 className="text-xl font-black text-white italic tracking-tighter mb-1">ARENA MASTER</h2>
-            <input 
-              type="text" 
-              placeholder="Search country..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white text-[12px] font-bold focus:outline-none focus:border-blue-500/50"
-            />
+            
+            <div className="mt-4">
+              <input 
+                type="text" 
+                placeholder="Search country..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-white text-[12px] font-bold focus:outline-none focus:border-blue-500/50"
+              />
+            </div>
           </div>
           
           <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-1.5">
@@ -274,13 +286,13 @@ const App: React.FC = () => {
           </div>
 
           <div className="p-4 border-t border-white/10 bg-black/40 shrink-0">
-            <button onClick={() => handleRestart()} className="w-full py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] bg-blue-600 text-white hover:bg-blue-700 transition-all">Restart Arena</button>
+            <button onClick={() => handleRestart()} className="w-full py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-[0_4px_20px_rgba(37,99,235,0.4)]">Restart Arena</button>
           </div>
         </div>
       </div>
 
       <button onClick={() => setShowSettings(!showSettings)} className="fixed bottom-8 right-8 z-30 p-4 bg-black/80 border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-2xl">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
 
       <div className={`fixed inset-y-0 right-0 z-50 w-80 bg-black/95 backdrop-blur-3xl border-l border-white/20 p-8 transform transition-transform duration-500 ${showSettings ? 'translate-x-0' : 'translate-x-full'}`}>
@@ -315,7 +327,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <div className={`transform transition-all duration-700 ${isPaused ? 'scale-[0.9] opacity-40' : 'scale-90 lg:scale-100'}`}>
+      <div className={`transform transition-all duration-700 ${isPaused ? 'scale-[0.9] opacity-40 grayscale' : 'scale-90 lg:scale-100'}`}>
         <Game key={`${gameKey}-${shape}-${theme}-${bounceIntensity}`} 
               status={status} 
               shape={shape} 
@@ -325,7 +337,7 @@ const App: React.FC = () => {
               paused={isPaused} 
               onGameEnd={handleGameEnd} 
               onWinnerDetected={handleWinnerDetected}
-              onElimination={() => setEliminatedCount(prev => prev + 1)} 
+              onElimination={handleElimination} 
               onStatusChange={setStatus} 
               onActiveUpdate={setActiveCountries} 
               onCountdownTick={playCountdownVoice}
@@ -336,14 +348,21 @@ const App: React.FC = () => {
         <>
           <Confetti />
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 animate-in fade-in duration-1000 px-4">
-            <div className="text-center max-w-lg w-full">
-              <div className="relative mb-10">
-                <div className="absolute inset-0 bg-blue-600 blur-[120px] opacity-70 animate-pulse" />
-                <img src={`https://flagcdn.com/w320/${winner.code}.png`} className="w-72 mx-auto rounded-3xl relative z-10 shadow-2xl border-4 border-white" alt={winner.name} />
+            <div className="text-center max-w-sm w-full bg-white/5 backdrop-blur-md p-8 rounded-[40px] border border-white/10 shadow-[0_0_80px_rgba(0,0,0,0.5)]">
+              <div className="relative mb-6">
+                <div className="absolute inset-0 bg-blue-600 blur-[60px] opacity-40 animate-pulse" />
+                <div className="relative z-10 w-48 h-32 mx-auto rounded-2xl overflow-hidden border-4 border-white shadow-2xl bg-black flex items-center justify-center">
+                  <img 
+                    src={`https://flagcdn.com/w320/${winner.code.toLowerCase()}.png`} 
+                    className="w-full h-full object-cover" 
+                    alt={winner.name} 
+                    onError={(e) => { e.currentTarget.src = `https://flagcdn.com/w320/un.png`; }}
+                  />
+                </div>
               </div>
-              <h1 className="text-7xl font-black text-white uppercase italic mb-4 tracking-tighter">{winner.name}</h1>
-              <p className="text-blue-400 text-4xl font-black uppercase tracking-[0.4em] mb-12 animate-bounce">CHAMPION!</p>
-              <button onClick={() => handleRestart()} className="w-full py-6 bg-blue-600 text-white font-black rounded-3xl text-2xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_80px_rgba(37,99,235,0.7)]">BATTLE AGAIN</button>
+              <h1 className="text-4xl lg:text-5xl font-black text-white uppercase italic mb-2 tracking-tighter truncate">{winner.name}</h1>
+              <p className="text-blue-400 text-xl font-black uppercase tracking-[0.4em] mb-8">CHAMPION!</p>
+              <button onClick={() => handleRestart()} className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl text-lg hover:scale-105 active:scale-95 transition-all shadow-[0_0_40px_rgba(37,99,235,0.5)]">BATTLE AGAIN</button>
             </div>
           </div>
         </>

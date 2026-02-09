@@ -35,7 +35,7 @@ interface GameProps {
   paused: boolean;
   onGameEnd: (winner: Country) => void;
   onWinnerDetected?: (winner: Country) => void;
-  onElimination: () => void;
+  onElimination: (country: Country) => void;
   onStatusChange: (status: GameStatus) => void;
   onActiveUpdate?: (countries: Country[]) => void;
   onCountdownTick?: (tick: number) => void;
@@ -67,8 +67,10 @@ const Game: React.FC<GameProps> = ({
 
   const CANVAS_SIZE = 800;
   const CENTER_X = CANVAS_SIZE / 2;
-  const CENTER_Y = CANVAS_SIZE / 2;
-  const CIRCLE_RADIUS = 180; 
+  // Moved center thoda niche (down)
+  const CENTER_Y = (CANVAS_SIZE / 2) + 60;
+  // Made circle thoda chota (smaller)
+  const CIRCLE_RADIUS = 160; 
   const SEGMENT_COUNT = 100; 
   const rotationRef = useRef(Math.PI * 1.5);
   const omega = 0.015; 
@@ -139,7 +141,7 @@ const Game: React.FC<GameProps> = ({
       countriesRef.current.set(flagBody.id, country);
       
       const img = new Image();
-      img.src = `https://flagcdn.com/w160/${country.code}.png`;
+      img.src = `https://flagcdn.com/w160/${country.code.toLowerCase()}.png`;
       textureCache.current.set(country.code, img);
     });
 
@@ -325,7 +327,8 @@ const Game: React.FC<GameProps> = ({
 
         flags.forEach(flag => {
           const distFromCenter = Math.hypot(flag.position.x - CENTER_X, flag.position.y - CENTER_Y);
-          if (distFromCenter > 520 || flag.position.y > 900) {
+          // Adjusted boundaries based on smaller circle
+          if (distFromCenter > 480 || flag.position.y > 950) {
             const country = countriesRef.current.get(flag.id);
             if (country) {
               if (targetWinnerId === country.code && flags.length > 1) {
@@ -334,7 +337,7 @@ const Game: React.FC<GameProps> = ({
                 return;
               }
               triggerEliminationEffect(flag.position.x, flag.position.y, themeAssets[theme].elimination);
-              onElimination();
+              onElimination(country); 
             }
             Composite.remove(engine.world, flag);
           }
@@ -348,11 +351,11 @@ const Game: React.FC<GameProps> = ({
             Body.setStatic(flags[0], true);
             shakeIntensityRef.current = 65;
             
-            // IMMEDIATE CALLBACK FOR VOICE
+            // Trigger winner detection for speech immediately
             onWinnerDetected?.(winner);
             
-            // DELAYED CALLBACK FOR UI OVERLAY
-            setTimeout(() => onGameEnd(winner), 4000);
+            // Delay the final overlay reveal for dramatic effect
+            setTimeout(() => onGameEnd(winner), 3500);
           }
         }
       }
@@ -367,7 +370,7 @@ const Game: React.FC<GameProps> = ({
       <canvas ref={canvasRef} className="w-full h-full block relative z-10" />
       {countdown !== null && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
-          <span className="text-[340px] font-black text-white drop-shadow-[0_0_140px_rgba(59,130,246,1)] animate-pulse-scale italic">
+          <span className="text-[340px] font-black text-white drop-shadow-[0_0_140px_rgba(59,130,246,1)] animate-pulse-scale italic -translate-y-8">
             {countdown}
           </span>
         </div>
