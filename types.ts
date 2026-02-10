@@ -10,9 +10,8 @@ export enum GameStatus {
   FINISHED = 'FINISHED'
 }
 
-export enum BoundaryShape {
+export enum FlagShape {
   CIRCLE = 'CIRCLE',
-  SQUARE = 'SQUARE',
   RECTANGLE = 'RECTANGLE'
 }
 

@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
 import { COUNTRIES } from '../constants/countries';
-import { GameStatus, Country, BoundaryShape, VisualTheme } from '../types';
+import { GameStatus, Country, FlagShape, VisualTheme } from '../types';
 
 const { Engine, Render, Runner, World, Bodies, Body, Composite, Events } = Matter;
 
@@ -28,7 +28,7 @@ interface EliminationFlash {
 
 interface GameProps {
   status: GameStatus;
-  shape: BoundaryShape;
+  flagShape: FlagShape;
   theme: VisualTheme;
   gapSize: number;
   bounceIntensity: number;
@@ -43,7 +43,7 @@ interface GameProps {
 }
 
 const Game: React.FC<GameProps> = ({ 
-  status, shape, theme, gapSize, bounceIntensity, paused, 
+  status, flagShape, theme, gapSize, bounceIntensity, paused, 
   onGameEnd, onWinnerDetected, onElimination, onStatusChange, onActiveUpdate, 
   onCountdownTick, targetWinnerId 
 }) => {
@@ -67,9 +67,7 @@ const Game: React.FC<GameProps> = ({
 
   const CANVAS_SIZE = 800;
   const CENTER_X = CANVAS_SIZE / 2;
-  // Moved center thoda niche (down)
   const CENTER_Y = (CANVAS_SIZE / 2) + 60;
-  // Made circle thoda chota (smaller)
   const CIRCLE_RADIUS = 160; 
   const SEGMENT_COUNT = 100; 
   const rotationRef = useRef(Math.PI * 1.5);
@@ -122,7 +120,7 @@ const Game: React.FC<GameProps> = ({
     Render.run(render);
 
     const flags: Matter.Body[] = [];
-    const baseSize = 36;
+    const baseSize = 36; // 36px width for circle/rect
 
     COUNTRIES.forEach((country) => {
       const angle = Math.random() * Math.PI * 2;
@@ -130,13 +128,23 @@ const Game: React.FC<GameProps> = ({
       const x = CENTER_X + Math.cos(angle) * dist;
       const y = CENTER_Y + Math.sin(angle) * dist;
 
-      const flagBody = Bodies.circle(x, y, baseSize / 2, { 
+      let flagBody: Matter.Body;
+      
+      const options = { 
         restitution: bounceIntensity, 
         friction: 0.05, 
         frictionAir: 0.005, 
         label: 'Flag', 
         render: { visible: false }
-      });
+      };
+
+      if (flagShape === FlagShape.RECTANGLE) {
+        // 3:2 Aspect Ratio often used for flags
+        flagBody = Bodies.rectangle(x, y, baseSize, baseSize * 0.67, options);
+      } else {
+        flagBody = Bodies.circle(x, y, baseSize / 2, options);
+      }
+
       flags.push(flagBody);
       countriesRef.current.set(flagBody.id, country);
       
@@ -193,12 +201,15 @@ const Game: React.FC<GameProps> = ({
         if (!country) return;
         const img = textureCache.current.get(country.code);
         if (!img?.complete) return;
+        
         ctx.save();
         ctx.translate(flag.position.x, flag.position.y);
         ctx.rotate(flag.angle);
+        
         let drawScale = 1;
         if (victoryFlagId === flag.id) {
           drawScale = 1 + victoryProgressRef.current * 6;
+          // Victory Shine effect
           ctx.save();
           ctx.rotate(-flag.angle + frameCountRef.current * 0.05);
           ctx.globalAlpha = 0.7 * victoryProgressRef.current;
@@ -209,16 +220,42 @@ const Game: React.FC<GameProps> = ({
           }
           ctx.restore();
         }
+
         const size = baseSize * drawScale;
-        ctx.beginPath(); ctx.arc(0, 0, size / 2, 0, Math.PI * 2); ctx.clip();
-        ctx.drawImage(img, -size/2, -size/2, size, size);
-        ctx.restore();
-        ctx.save();
-        ctx.translate(flag.position.x, flag.position.y);
-        ctx.strokeStyle = victoryFlagId === flag.id ? '#fbbf24' : 'white';
-        ctx.lineWidth = victoryFlagId === flag.id ? 12 * drawScale : 2.5;
-        ctx.beginPath(); ctx.arc(0, 0, size/2, 0, Math.PI * 2); ctx.stroke();
-        ctx.restore();
+        
+        if (flagShape === FlagShape.RECTANGLE) {
+           const w = size;
+           const h = size * 0.67;
+           ctx.beginPath(); 
+           ctx.rect(-w/2, -h/2, w, h); 
+           ctx.clip();
+           ctx.drawImage(img, -w/2, -h/2, w, h);
+           ctx.restore(); // restore clip
+           
+           // Border
+           ctx.save();
+           ctx.translate(flag.position.x, flag.position.y);
+           ctx.rotate(flag.angle);
+           ctx.strokeStyle = victoryFlagId === flag.id ? '#fbbf24' : 'white';
+           ctx.lineWidth = victoryFlagId === flag.id ? 12 * drawScale : 2.5;
+           ctx.beginPath(); 
+           ctx.rect(-w/2, -h/2, w, h); 
+           ctx.stroke();
+           ctx.restore();
+        } else {
+           // Circle
+           ctx.beginPath(); ctx.arc(0, 0, size / 2, 0, Math.PI * 2); ctx.clip();
+           ctx.drawImage(img, -size/2, -size/2, size, size);
+           ctx.restore();
+           
+           // Border
+           ctx.save();
+           ctx.translate(flag.position.x, flag.position.y);
+           ctx.strokeStyle = victoryFlagId === flag.id ? '#fbbf24' : 'white';
+           ctx.lineWidth = victoryFlagId === flag.id ? 12 * drawScale : 2.5;
+           ctx.beginPath(); ctx.arc(0, 0, size/2, 0, Math.PI * 2); ctx.stroke();
+           ctx.restore();
+        }
       });
 
       if (victoryFlagId) {
@@ -240,22 +277,38 @@ const Game: React.FC<GameProps> = ({
     else Runner.run(runnerRef.current, engineRef.current);
   }, [paused]);
 
+  // Arena Generation
   useEffect(() => {
     if (!engineRef.current) return;
     const engine = engineRef.current;
+    
+    // Clear old arena
     boundaryPartsRef.current.forEach(b => Composite.remove(engine.world, b));
+
     const parts: Matter.Body[] = [];
     const color = themeAssets[theme].segment;
     const VIRTUAL_GAP_START = Math.floor(SEGMENT_COUNT * 0.75);
+    
+    // Create boundary segments - Standard Circle
     for (let i = 0; i < SEGMENT_COUNT; i++) {
       if (i >= VIRTUAL_GAP_START && i < VIRTUAL_GAP_START + gapSize) continue;
+      
       const t = i / SEGMENT_COUNT;
-      const angle = t * Math.PI * 2;
-      const x = CENTER_X + Math.cos(angle) * CIRCLE_RADIUS;
-      const y = CENTER_Y + Math.sin(angle) * CIRCLE_RADIUS;
-      const seg = Bodies.rectangle(x, y, 28, 20, {
+      const theta = t * Math.PI * 2;
+      const x = Math.cos(theta) * CIRCLE_RADIUS;
+      const y = Math.sin(theta) * CIRCLE_RADIUS;
+      const angle = theta + Math.PI / 2;
+      
+      // Rotate by current rotation
+      const rot = rotationRef.current;
+      const cos = Math.cos(rot);
+      const sin = Math.sin(rot);
+      const gx = CENTER_X + x * cos - y * sin;
+      const gy = CENTER_Y + x * sin + y * cos;
+      
+      const seg = Bodies.rectangle(gx, gy, 28, 20, {
         isStatic: true, 
-        angle: angle + Math.PI/2, 
+        angle: angle + rot, 
         restitution: 1.0, 
         friction: 0.05,
         render: { fillStyle: color }
@@ -264,7 +317,8 @@ const Game: React.FC<GameProps> = ({
     }
     boundaryPartsRef.current = parts;
     Composite.add(engine.world, parts);
-  }, [shape, theme, gapSize]);
+
+  }, [theme, gapSize, flagShape]);
 
   // Robust countdown logic
   useEffect(() => {
@@ -305,19 +359,38 @@ const Game: React.FC<GameProps> = ({
 
       if (victoryFlagId === null) {
         rotationRef.current += omega; 
+        
+        // Update all boundary segments positions (Circle Only)
         boundaryPartsRef.current.forEach((part, i) => {
-          const adjustedI = i >= Math.floor(SEGMENT_COUNT * 0.75) ? i + gapSize : i;
-          const t = adjustedI / SEGMENT_COUNT;
-          const angle = t * Math.PI * 2 + rotationRef.current;
-          const nextX = CENTER_X + Math.cos(angle) * CIRCLE_RADIUS;
-          const nextY = CENTER_Y + Math.sin(angle) * CIRCLE_RADIUS;
-          Body.setPosition(part, { x: nextX, y: nextY });
-          Body.setAngle(part, angle + Math.PI/2);
+          const VIRTUAL_GAP_START = Math.floor(SEGMENT_COUNT * 0.75);
+          
+          let adjustedIndex = i;
+          if (i >= VIRTUAL_GAP_START) {
+            adjustedIndex = i + gapSize;
+          }
+          
+          const t = adjustedIndex / SEGMENT_COUNT;
+          const theta = t * Math.PI * 2;
+          const lx = Math.cos(theta) * CIRCLE_RADIUS;
+          const ly = Math.sin(theta) * CIRCLE_RADIUS;
+          const la = theta + Math.PI / 2;
+          
+          const rot = rotationRef.current;
+          const cos = Math.cos(rot);
+          const sin = Math.sin(rot);
+          const gx = CENTER_X + lx * cos - ly * sin;
+          const gy = CENTER_Y + lx * sin + ly * cos;
+          
+          Body.setPosition(part, { x: gx, y: gy });
+          Body.setAngle(part, la + rot);
         });
 
-        const flags = Composite.allBodies(engine.world).filter(b => countriesRef.current.has(b.id));
+        // Identify Active Flags (Label 'Flag')
+        const allBodies = Composite.allBodies(engine.world);
+        const activeFlags = allBodies.filter(b => countriesRef.current.has(b.id) && b.label === 'Flag');
+
         if (onActiveUpdate && frameCountRef.current % 15 === 0) {
-          const ranked = [...flags].sort((a, b) => {
+          const ranked = [...activeFlags].sort((a, b) => {
              const distA = Math.hypot(a.position.x - CENTER_X, a.position.y - CENTER_Y);
              const distB = Math.hypot(b.position.x - CENTER_X, b.position.y - CENTER_Y);
              return distA - distB;
@@ -325,30 +398,32 @@ const Game: React.FC<GameProps> = ({
           onActiveUpdate(ranked);
         }
 
-        flags.forEach(flag => {
+        activeFlags.forEach(flag => {
           const distFromCenter = Math.hypot(flag.position.x - CENTER_X, flag.position.y - CENTER_Y);
-          // Adjusted boundaries based on smaller circle
+          // Elimination condition
           if (distFromCenter > 480 || flag.position.y > 950) {
             const country = countriesRef.current.get(flag.id);
             if (country) {
-              if (targetWinnerId === country.code && flags.length > 1) {
+              if (targetWinnerId === country.code && activeFlags.length > 1) {
                 Body.setPosition(flag, { x: CENTER_X, y: CENTER_Y });
                 Body.setVelocity(flag, { x: 0, y: 0 });
                 return;
               }
+              
+              // Standard Elimination Logic
               triggerEliminationEffect(flag.position.x, flag.position.y, themeAssets[theme].elimination);
               onElimination(country); 
+              Composite.remove(engine.world, flag);
             }
-            Composite.remove(engine.world, flag);
           }
         });
 
-        if (flags.length === 1 && !hasEndedRef.current) {
-          const winner = countriesRef.current.get(flags[0].id);
+        if (activeFlags.length === 1 && !hasEndedRef.current) {
+          const winner = countriesRef.current.get(activeFlags[0].id);
           if (winner) {
             hasEndedRef.current = true;
-            setVictoryFlagId(flags[0].id);
-            Body.setStatic(flags[0], true);
+            setVictoryFlagId(activeFlags[0].id);
+            Body.setStatic(activeFlags[0], true);
             shakeIntensityRef.current = 65;
             
             // Trigger winner detection for speech immediately
@@ -362,7 +437,7 @@ const Game: React.FC<GameProps> = ({
     };
     Events.on(engine, 'afterUpdate', loop);
     return () => Events.off(engine, 'afterUpdate', loop);
-  }, [status, paused, victoryFlagId, gapSize, targetWinnerId, theme]);
+  }, [status, paused, victoryFlagId, gapSize, targetWinnerId, theme, flagShape]);
 
   return (
     <div ref={containerRef} className="relative w-[800px] h-[800px] flex items-center justify-center will-change-transform">

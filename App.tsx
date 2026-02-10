@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import Game from './components/Game';
-import { GameStatus, Country, BoundaryShape, VisualTheme } from './types';
+import { GameStatus, Country, FlagShape, VisualTheme } from './types';
 import { COUNTRIES } from './constants/countries';
 import { GoogleGenAI, Modality } from "@google/genai";
 
@@ -78,7 +78,7 @@ const App: React.FC = () => {
   const [winner, setWinner] = useState<Country | null>(null);
   const [eliminatedCount, setEliminatedCount] = useState(0);
   const [gameKey, setGameKey] = useState(0);
-  const [shape, setShape] = useState<BoundaryShape>(BoundaryShape.CIRCLE);
+  const [flagShape, setFlagShape] = useState<FlagShape>(FlagShape.CIRCLE);
   const [theme, setTheme] = useState<VisualTheme>(VisualTheme.SPACE);
   const [gapSize, setGapSize] = useState(8); 
   const [bounceIntensity, setBounceIntensity] = useState(1.15); 
@@ -321,6 +321,16 @@ const App: React.FC = () => {
               ))}
             </div>
           </div>
+          
+          <div className="space-y-4">
+            <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">Flag Shape</p>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.values(FlagShape).map(s => (
+                <button key={s} onClick={() => setFlagShape(s)} className={`py-2 text-[9px] font-black uppercase rounded-lg border transition-all ${flagShape === s ? 'bg-purple-600 border-purple-400 text-white' : 'bg-white/5 border-white/10 text-white/40'}`}>{s}</button>
+              ))}
+            </div>
+          </div>
+
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">Exit Gap Size</p>
@@ -340,9 +350,9 @@ const App: React.FC = () => {
       </div>
 
       <div className={`transform transition-all duration-700 ${isPaused ? 'scale-[0.9] opacity-40 grayscale blur-sm' : 'scale-90 lg:scale-100'}`}>
-        <Game key={`${gameKey}-${shape}-${theme}-${bounceIntensity}`} 
+        <Game key={`${gameKey}-${flagShape}-${theme}-${bounceIntensity}`} 
               status={status} 
-              shape={shape} 
+              flagShape={flagShape} 
               theme={theme}
               gapSize={gapSize} 
               bounceIntensity={bounceIntensity}
