@@ -295,6 +295,18 @@ const App: React.FC = () => {
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
 
+      {/* PAUSE BUTTON */}
+      <button 
+        onClick={() => setIsPaused(!isPaused)} 
+        className="fixed bottom-8 left-8 z-30 p-4 bg-black/80 border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-2xl hover:scale-110 active:scale-95"
+      >
+        {isPaused ? (
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        )}
+      </button>
+
       <div className={`fixed inset-y-0 right-0 z-50 w-80 bg-black/95 backdrop-blur-3xl border-l border-white/20 p-8 transform transition-transform duration-500 ${showSettings ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex justify-between items-center mb-10">
           <h3 className="text-white font-black uppercase tracking-[0.2em] text-sm">Arena Options</h3>
@@ -327,7 +339,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <div className={`transform transition-all duration-700 ${isPaused ? 'scale-[0.9] opacity-40 grayscale' : 'scale-90 lg:scale-100'}`}>
+      <div className={`transform transition-all duration-700 ${isPaused ? 'scale-[0.9] opacity-40 grayscale blur-sm' : 'scale-90 lg:scale-100'}`}>
         <Game key={`${gameKey}-${shape}-${theme}-${bounceIntensity}`} 
               status={status} 
               shape={shape} 
@@ -343,6 +355,12 @@ const App: React.FC = () => {
               onCountdownTick={playCountdownVoice}
               targetWinnerId={targetWinnerId} />
       </div>
+
+      {isPaused && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center pointer-events-none">
+          <h2 className="text-6xl font-black text-white/20 tracking-[0.5em] uppercase animate-pulse">Paused</h2>
+        </div>
+      )}
 
       {status === GameStatus.FINISHED && winner && (
         <>
