@@ -81,7 +81,7 @@ const Game: React.FC<GameProps> = ({
   };
 
   const triggerEliminationEffect = (x: number, y: number, color: string = '#ef4444') => {
-    shakeIntensityRef.current = 22;
+    shakeIntensityRef.current = 10; 
     flashesRef.current.push({ x, y, alpha: 0.8, size: 20, maxSize: 120 });
     for (let i = 0; i < 40; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -102,6 +102,10 @@ const Game: React.FC<GameProps> = ({
       gravity: { x: 0, y: 1.6, scale: 0 }, 
       enableSleeping: false 
     });
+    
+    // Slow Motion: Set a lower timeScale for more cinematic physics (0.6 is a sweet spot)
+    engine.timing.timeScale = 0.6;
+    
     engineRef.current = engine;
 
     const render = Render.create({ 
@@ -120,7 +124,7 @@ const Game: React.FC<GameProps> = ({
     Render.run(render);
 
     const flags: Matter.Body[] = [];
-    const baseSize = 36; // 36px width for circle/rect
+    const baseSize = 22; 
 
     COUNTRIES.forEach((country) => {
       const angle = Math.random() * Math.PI * 2;
@@ -133,13 +137,12 @@ const Game: React.FC<GameProps> = ({
       const options = { 
         restitution: bounceIntensity, 
         friction: 0.05, 
-        frictionAir: 0.005, 
+        frictionAir: 0.018, // Slightly more air resistance for a dreamier "slow motion" feel
         label: 'Flag', 
         render: { visible: false }
       };
 
       if (flagShape === FlagShape.RECTANGLE) {
-        // 3:2 Aspect Ratio often used for flags
         flagBody = Bodies.rectangle(x, y, baseSize, baseSize * 0.67, options);
       } else {
         flagBody = Bodies.circle(x, y, baseSize / 2, options);
@@ -159,6 +162,9 @@ const Game: React.FC<GameProps> = ({
     Events.on(render, 'afterRender', () => {
       const ctx = render.context;
       const dt = 1/60;
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       
       if (!paused) {
         particlesRef.current = particlesRef.current.filter(p => { 
@@ -209,7 +215,6 @@ const Game: React.FC<GameProps> = ({
         let drawScale = 1;
         if (victoryFlagId === flag.id) {
           drawScale = 1 + victoryProgressRef.current * 6;
-          // Victory Shine effect
           ctx.save();
           ctx.rotate(-flag.angle + frameCountRef.current * 0.05);
           ctx.globalAlpha = 0.7 * victoryProgressRef.current;
@@ -222,6 +227,10 @@ const Game: React.FC<GameProps> = ({
         }
 
         const size = baseSize * drawScale;
+
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowOffsetY = 2;
         
         if (flagShape === FlagShape.RECTANGLE) {
            const w = size;
@@ -230,29 +239,26 @@ const Game: React.FC<GameProps> = ({
            ctx.rect(-w/2, -h/2, w, h); 
            ctx.clip();
            ctx.drawImage(img, -w/2, -h/2, w, h);
-           ctx.restore(); // restore clip
+           ctx.restore(); 
            
-           // Border
            ctx.save();
            ctx.translate(flag.position.x, flag.position.y);
            ctx.rotate(flag.angle);
            ctx.strokeStyle = victoryFlagId === flag.id ? '#fbbf24' : 'white';
-           ctx.lineWidth = victoryFlagId === flag.id ? 12 * drawScale : 2.5;
+           ctx.lineWidth = victoryFlagId === flag.id ? 12 * drawScale : 3; 
            ctx.beginPath(); 
            ctx.rect(-w/2, -h/2, w, h); 
            ctx.stroke();
            ctx.restore();
         } else {
-           // Circle
            ctx.beginPath(); ctx.arc(0, 0, size / 2, 0, Math.PI * 2); ctx.clip();
            ctx.drawImage(img, -size/2, -size/2, size, size);
            ctx.restore();
            
-           // Border
            ctx.save();
            ctx.translate(flag.position.x, flag.position.y);
            ctx.strokeStyle = victoryFlagId === flag.id ? '#fbbf24' : 'white';
-           ctx.lineWidth = victoryFlagId === flag.id ? 12 * drawScale : 2.5;
+           ctx.lineWidth = victoryFlagId === flag.id ? 12 * drawScale : 3; 
            ctx.beginPath(); ctx.arc(0, 0, size/2, 0, Math.PI * 2); ctx.stroke();
            ctx.restore();
         }
@@ -277,19 +283,16 @@ const Game: React.FC<GameProps> = ({
     else Runner.run(runnerRef.current, engineRef.current);
   }, [paused]);
 
-  // Arena Generation
   useEffect(() => {
     if (!engineRef.current) return;
     const engine = engineRef.current;
     
-    // Clear old arena
     boundaryPartsRef.current.forEach(b => Composite.remove(engine.world, b));
 
     const parts: Matter.Body[] = [];
     const color = themeAssets[theme].segment;
     const VIRTUAL_GAP_START = Math.floor(SEGMENT_COUNT * 0.75);
     
-    // Create boundary segments - Standard Circle
     for (let i = 0; i < SEGMENT_COUNT; i++) {
       if (i >= VIRTUAL_GAP_START && i < VIRTUAL_GAP_START + gapSize) continue;
       
@@ -299,7 +302,6 @@ const Game: React.FC<GameProps> = ({
       const y = Math.sin(theta) * CIRCLE_RADIUS;
       const angle = theta + Math.PI / 2;
       
-      // Rotate by current rotation
       const rot = rotationRef.current;
       const cos = Math.cos(rot);
       const sin = Math.sin(rot);
@@ -320,7 +322,6 @@ const Game: React.FC<GameProps> = ({
 
   }, [theme, gapSize, flagShape]);
 
-  // Robust countdown logic
   useEffect(() => {
     if (paused || countdown === null || status !== GameStatus.STARTING) return;
     
@@ -330,7 +331,8 @@ const Game: React.FC<GameProps> = ({
       if (next < 0) { 
         onStatusChange(GameStatus.PLAYING); 
         onCountdownTick?.(0);
-        if (engineRef.current) engineRef.current.gravity.scale = 0.0012;
+        // Slow Motion: Reduce gravity scale further for that "floaty" impact
+        if (engineRef.current) engineRef.current.gravity.scale = 0.0004; 
         setCountdown(null);
       } else {
         onCountdownTick?.(next);
@@ -341,7 +343,6 @@ const Game: React.FC<GameProps> = ({
     return () => clearTimeout(timer);
   }, [paused, countdown, status]);
 
-  // Handle first tick manually
   useEffect(() => {
     if (countdown === 3 && status === GameStatus.STARTING) {
       onCountdownTick?.(3);
@@ -354,13 +355,11 @@ const Game: React.FC<GameProps> = ({
       if (paused) return;
       frameCountRef.current++;
       
-      // Zero movement if not playing
       if (status !== GameStatus.PLAYING) return;
 
       if (victoryFlagId === null) {
         rotationRef.current += omega; 
         
-        // Update all boundary segments positions (Circle Only)
         boundaryPartsRef.current.forEach((part, i) => {
           const VIRTUAL_GAP_START = Math.floor(SEGMENT_COUNT * 0.75);
           
@@ -385,7 +384,6 @@ const Game: React.FC<GameProps> = ({
           Body.setAngle(part, la + rot);
         });
 
-        // Identify Active Flags (Label 'Flag')
         const allBodies = Composite.allBodies(engine.world);
         const activeFlags = allBodies.filter(b => countriesRef.current.has(b.id) && b.label === 'Flag');
 
@@ -400,7 +398,6 @@ const Game: React.FC<GameProps> = ({
 
         activeFlags.forEach(flag => {
           const distFromCenter = Math.hypot(flag.position.x - CENTER_X, flag.position.y - CENTER_Y);
-          // Elimination condition
           if (distFromCenter > 480 || flag.position.y > 950) {
             const country = countriesRef.current.get(flag.id);
             if (country) {
@@ -410,7 +407,6 @@ const Game: React.FC<GameProps> = ({
                 return;
               }
               
-              // Standard Elimination Logic
               triggerEliminationEffect(flag.position.x, flag.position.y, themeAssets[theme].elimination);
               onElimination(country); 
               Composite.remove(engine.world, flag);
@@ -424,12 +420,10 @@ const Game: React.FC<GameProps> = ({
             hasEndedRef.current = true;
             setVictoryFlagId(activeFlags[0].id);
             Body.setStatic(activeFlags[0], true);
-            shakeIntensityRef.current = 65;
+            shakeIntensityRef.current = 30; 
             
-            // Trigger winner detection for speech immediately
             onWinnerDetected?.(winner);
             
-            // Delay the final overlay reveal for dramatic effect
             setTimeout(() => onGameEnd(winner), 3500);
           }
         }
